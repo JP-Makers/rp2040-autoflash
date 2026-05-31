@@ -1,5 +1,22 @@
 # What's New?
 
+## 1.0.3
+
+### Fixed
+- Reset no longer fails with *"A device which does not exist was specified"* on Windows
+- Root cause: previous code opened the port at 9600 baud then tried to change `BaudRate` to 1200 on an already-open port — most Windows USB-CDC drivers reject this
+- Fix: port is now opened **directly at 1200 baud** via the `SerialPort` constructor — no baud change needed after open
+
+### Changed
+- Reset now tries three methods in order so it never silently fails:
+  1. PowerShell `System.IO.Ports.SerialPort` opened at 1200 baud
+  2. Python 3 + pyserial fallback (`pip install pyserial`)
+  3. .NET inline C# compiled via `csc.exe` (built into all Windows installs)
+- Each failed method logs a clear reason before trying the next
+- If all three fail, the error message tells you exactly what to check
+
+---
+
 ## 1.0.2
 
 ### Added

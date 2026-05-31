@@ -30,10 +30,10 @@ npm install
 
 # 3. Package it
 npm run package
-# → produces rp2040-autoflash-1.0.2.vsix
+# → produces rp2040-autoflash-1.0.3.vsix
 
 # 4. Install in VS Code
-code --install-extension rp2040-autoflash-1.0.2.vsix
+code --install-extension rp2040-autoflash-1.0.3.vsix
 ```
 
 ### From VS Code

@@ -1,181 +1,233 @@
 // src/reset.js
-// 1200bps DTR reset trick using Node.js child_process + platform tools.
-// No native npm modules needed — avoids serialport binary issues in VSIX.
+// 1200bps reset trick for RP2040 — Windows + Mac/Linux
+// Fix: Don't change BaudRate after opening — some USB-CDC drivers throw
+// "device does not exist" when baud is changed while DTR is being toggled.
+// The actual trigger is: open at 1200 baud → assert DTR → close.
+// Arduino IDE does the same: it opens a NEW port object at 1200, not update().
 
 'use strict';
 
-const { execSync, exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const { log } = require('./output');
 
 /**
- * Reset RP2040 into bootloader using the 1200bps trick.
- * Uses PowerShell (Windows) or Python3 (Mac/Linux) to open the serial port.
- * @param {string} portPath - e.g. "COM3" or "/dev/ttyACM0"
+ * Reset RP2040 into bootloader via 1200bps trick.
+ * Tries three methods in order until one succeeds.
  */
 async function resetRP2040(portPath) {
-  const platform = process.platform;
+  log(`Attempting reset on ${portPath}…`);
 
-  if (platform === 'win32') {
-    return resetWindows(portPath);
+  // Method 1: PowerShell — open directly at 1200 baud (no baud change)
+  if (process.platform === 'win32') {
+    try {
+      await resetPowerShell(portPath);
+      return;
+    } catch (e) {
+      log(`PowerShell method failed: ${e.message}`);
+      log('Trying Python fallback…');
+    }
+
+    // Method 2: Python pyserial
+    try {
+      await resetPython(portPath);
+      return;
+    } catch (e) {
+      log(`Python method failed: ${e.message}`);
+      log('Trying .NET direct fallback…');
+    }
+
+    // Method 3: .NET via PowerShell (constructor at 1200 directly)
+    try {
+      await resetDotNet(portPath);
+      return;
+    } catch (e) {
+      throw new Error(
+        `All reset methods failed on ${portPath}.\n\n` +
+        `Make sure:\n` +
+        `1. Your firmware has USB serial (stdio_usb_init)\n` +
+        `2. No other app (Serial Monitor, PuTTY) is using ${portPath}\n` +
+        `3. Python pyserial is installed: pip install pyserial\n\n` +
+        `Last error: ${e.message}`
+      );
+    }
   } else {
-    return resetUnix(portPath);
+    // Mac / Linux — Python3 is reliable
+    await resetPython(portPath);
   }
 }
 
-/** Windows: use PowerShell to send the 1200bps pulse */
-async function resetWindows(portPath) {
-  // PowerShell script: open port at 9600, assert DTR, wait, clear DTR, set 1200, close
-  const ps = `
-$port = New-Object System.IO.Ports.SerialPort '${portPath}', 9600
-$port.Open()
-$port.DtrEnable = $true
-Start-Sleep -Milliseconds 100
-$port.DtrEnable = $false
-$port.BaudRate = 1200
-Start-Sleep -Milliseconds 50
-$port.Close()
-Write-Host 'Reset pulse sent.'
-`.trim();
+// ── Method 1: PowerShell — open at 1200 baud directly, toggle DTR, close ────
+// KEY FIX: We never call $port.BaudRate = 1200 after open.
+// Instead we construct the SerialPort object with 1200 from the start.
+async function resetPowerShell(portPath) {
+  const script = [
+    `$p = New-Object System.IO.Ports.SerialPort('${portPath}', 1200, 'None', 8, 'One')`,
+    `$p.DtrEnable = $false`,
+    `$p.Open()`,
+    `$p.DtrEnable = $true`,
+    `Start-Sleep -Milliseconds 50`,
+    `$p.DtrEnable = $false`,
+    `Start-Sleep -Milliseconds 50`,
+    `$p.Close()`,
+    `$p.Dispose()`,
+    `Write-Host 'reset-ok'`
+  ].join('; ');
 
-  log(`Sending 1200bps reset via PowerShell on ${portPath}…`);
-
+  log('Method 1: PowerShell open-at-1200…');
   return new Promise((resolve, reject) => {
     exec(
-      `powershell -NoProfile -NonInteractive -Command "${ps.replace(/"/g, '\\"').replace(/\n/g, '; ')}"`,
-      { timeout: 5000 },
+      `powershell -NoProfile -NonInteractive -Command "${script}"`,
+      { timeout: 6000 },
       (err, stdout, stderr) => {
-        if (stdout) log(stdout.trim());
-        if (stderr) log(`PS stderr: ${stderr.trim()}`);
-        if (err && !stdout.includes('Reset pulse')) {
-          // Try fallback Python approach
-          log('PowerShell approach failed, trying Python fallback…');
-          return resetPython(portPath).then(resolve).catch(reject);
+        const out = stdout.trim();
+        if (stderr && !out.includes('reset-ok')) {
+          log(`PS stderr: ${stderr.trim()}`);
         }
-        resolve();
+        if (out.includes('reset-ok')) {
+          log('PowerShell reset OK.');
+          resolve();
+        } else {
+          reject(new Error(stderr?.trim() || err?.message || 'No confirmation'));
+        }
       }
     );
   });
 }
 
-/** Mac/Linux: use Python3 (always available on these platforms) */
-async function resetUnix(portPath) {
-  return resetPython(portPath);
-}
-
-/** Python3 fallback — works on all platforms if Python is available */
+// ── Method 2: Python pyserial ─────────────────────────────────────────────────
 async function resetPython(portPath) {
-  const pyScript = `
+  const py = `
 import serial, time
-s = serial.Serial()
-s.port = '${portPath}'
-s.open()
-s.baudrate = 9600
-s.dtr = True
-time.sleep(0.1)
-s.dtr = False
-s.baudrate = 1200
-time.sleep(0.05)
-s.close()
-print('Reset pulse sent.')
-`.trim();
+try:
+    s = serial.Serial('${portPath}', baudrate=1200, bytesize=8, parity='N', stopbits=1, timeout=1)
+    s.dtr = False
+    s.dtr = True
+    time.sleep(0.05)
+    s.dtr = False
+    time.sleep(0.05)
+    s.close()
+    print('reset-ok')
+except Exception as e:
+    print('ERR:' + str(e))
+`.trim().replace(/\n/g, '\n');
 
-  log(`Sending 1200bps reset via Python on ${portPath}…`);
+  const cmd = process.platform === 'win32'
+    ? `python -c "${py.replace(/\n/g,'\\n').replace(/"/g,'\\"')}"`
+    : `python3 -c '${py}'`;
 
+  log('Method 2: Python pyserial reset…');
   return new Promise((resolve, reject) => {
-    const cmd = process.platform === 'win32'
-      ? `python -c "${pyScript.replace(/\n/g, '; ').replace(/"/g, '\\"')}"`
-      : `python3 -c '${pyScript.replace(/\n/g, '; ')}'`;
-
-    exec(cmd, { timeout: 5000 }, (err, stdout, stderr) => {
-      if (stdout) log(stdout.trim());
-      if (err) {
-        log(`Python error: ${stderr || err.message}`);
-        return reject(new Error(
-          `Could not reset RP2040.\n\n` +
-          `Make sure Python 3 with 'pyserial' is installed:\n` +
-          `  pip install pyserial\n\n` +
-          `Error: ${err.message}`
+    exec(cmd, { timeout: 6000 }, (err, stdout, stderr) => {
+      const out = (stdout || '').trim();
+      if (out.includes('reset-ok')) {
+        log('Python reset OK.');
+        resolve();
+      } else if (out.startsWith('ERR:')) {
+        reject(new Error(out.replace('ERR:', '')));
+      } else {
+        reject(new Error(
+          err?.message ||
+          'pyserial not found — run: pip install pyserial'
         ));
       }
-      resolve();
     });
   });
 }
 
-/**
- * List serial ports using platform tools — no native npm needed.
- * @returns {Promise<Array<{path: string, description: string}>>}
- */
-async function listRP2040Ports() {
-  const platform = process.platform;
-
-  try {
-    if (platform === 'win32') {
-      return listPortsWindows();
-    } else if (platform === 'darwin') {
-      return listPortsMac();
-    } else {
-      return listPortsLinux();
-    }
-  } catch (e) {
-    log(`Port listing error: ${e.message}`);
-    return [];
+// ── Method 3: .NET SerialPort via inline C# compiled at runtime ───────────────
+async function resetDotNet(portPath) {
+  const cs = `
+using System; using System.IO.Ports; using System.Threading;
+class R {
+  static void Main() {
+    var p = new SerialPort("${portPath}", 1200, Parity.None, 8, StopBits.One);
+    p.DtrEnable = false;
+    p.Open();
+    p.DtrEnable = true;
+    Thread.Sleep(50);
+    p.DtrEnable = false;
+    Thread.Sleep(50);
+    p.Close();
+    Console.WriteLine("reset-ok");
   }
+}`.trim();
+
+  const tmpCs  = require('os').tmpdir() + '\\rp2040reset.cs';
+  const tmpExe = require('os').tmpdir() + '\\rp2040reset.exe';
+  require('fs').writeFileSync(tmpCs, cs);
+
+  log('Method 3: .NET compiled reset…');
+  return new Promise((resolve, reject) => {
+    // Try csc (C# compiler, part of .NET Framework on all Windows)
+    exec(
+      `csc /out:"${tmpExe}" "${tmpCs}" && "${tmpExe}"`,
+      { timeout: 10000 },
+      (err, stdout, stderr) => {
+        if ((stdout || '').includes('reset-ok')) {
+          log('.NET reset OK.');
+          resolve();
+        } else {
+          reject(new Error(stderr?.trim() || err?.message || 'csc not available'));
+        }
+      }
+    );
+  });
+}
+
+// ── Port listing ──────────────────────────────────────────────────────────────
+async function listRP2040Ports() {
+  const p = process.platform;
+  try {
+    if (p === 'win32')  return listPortsWindows();
+    if (p === 'darwin') return listPortsMac();
+    return listPortsLinux();
+  } catch (e) { log(`Port list error: ${e.message}`); return []; }
 }
 
 function listPortsWindows() {
-  const out = execSync(
-    'powershell -NoProfile -Command "Get-PnpDevice -Class Ports -Status OK | Select-Object FriendlyName, InstanceId | ConvertTo-Json"',
-    { timeout: 5000, encoding: 'utf8' }
-  );
-
-  let devices = [];
   try {
-    const parsed = JSON.parse(out);
-    devices = Array.isArray(parsed) ? parsed : [parsed];
-  } catch (_) {}
+    const out = execSync(
+      'powershell -NoProfile -Command "Get-PnpDevice -Class Ports -Status OK | Select-Object FriendlyName | ConvertTo-Json"',
+      { timeout: 5000, encoding: 'utf8' }
+    );
+    let devices = JSON.parse(out);
+    if (!Array.isArray(devices)) devices = [devices];
+    const ports = devices
+      .map(d => {
+        const m = d.FriendlyName?.match(/\(COM\d+\)/);
+        return m ? { path: m[0].replace(/[()]/g, ''), description: d.FriendlyName } : null;
+      })
+      .filter(Boolean);
 
-  const ports = devices
-    .map((d) => {
-      const match = d.FriendlyName?.match(/\(COM\d+\)/);
-      const comPort = match ? match[0].replace(/[()]/g, '') : null;
-      return comPort ? { path: comPort, description: d.FriendlyName || '' } : null;
-    })
-    .filter(Boolean);
-
-  // Also try simple mode_con fallback
-  if (ports.length === 0) {
+    // Sort: RP2040/Pico first
+    return ports.sort((a, b) => {
+      const aRP = /pico|rp2/i.test(a.description);
+      const bRP = /pico|rp2/i.test(b.description);
+      return aRP === bRP ? 0 : aRP ? -1 : 1;
+    });
+  } catch (_) {
+    // Fallback: mode command
     try {
-      const out2 = execSync('mode', { encoding: 'utf8', timeout: 3000 });
-      const matches = out2.match(/COM\d+/g) || [];
-      return [...new Set(matches)].map((p) => ({ path: p, description: '' }));
-    } catch (_) {}
+      const out = execSync('mode', { encoding: 'utf8', timeout: 3000 });
+      return [...new Set(out.match(/COM\d+/g) || [])].map(p => ({ path: p, description: '' }));
+    } catch (_) { return []; }
   }
-
-  // Sort: RP2040-related ports first
-  return ports.sort((a, b) => {
-    const aRP = a.description.toLowerCase().includes('pico') || a.description.toLowerCase().includes('rp2');
-    const bRP = b.description.toLowerCase().includes('pico') || b.description.toLowerCase().includes('rp2');
-    return aRP === bRP ? 0 : aRP ? -1 : 1;
-  });
 }
 
 function listPortsMac() {
-  const out = execSync('ls /dev/tty.* /dev/cu.* 2>/dev/null || true', {
-    encoding: 'utf8', timeout: 3000
-  });
-  return out.trim().split('\n')
-    .filter((p) => p && (p.includes('usbmodem') || p.includes('usbserial') || p.includes('ACM')))
-    .map((p) => ({ path: p.trim(), description: '' }));
+  try {
+    const out = execSync('ls /dev/tty.* /dev/cu.* 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+    return out.trim().split('\n')
+      .filter(p => p && /usbmodem|usbserial|ACM/i.test(p))
+      .map(p => ({ path: p.trim(), description: '' }));
+  } catch (_) { return []; }
 }
 
 function listPortsLinux() {
-  const out = execSync('ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || true', {
-    encoding: 'utf8', timeout: 3000
-  });
-  return out.trim().split('\n')
-    .filter(Boolean)
-    .map((p) => ({ path: p.trim(), description: '' }));
+  try {
+    const out = execSync('ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+    return out.trim().split('\n').filter(Boolean).map(p => ({ path: p.trim(), description: '' }));
+  } catch (_) { return []; }
 }
 
 module.exports = { resetRP2040, listRP2040Ports };

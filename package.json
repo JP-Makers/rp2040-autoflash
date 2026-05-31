@@ -2,7 +2,7 @@
   "name": "rp2040-autoflash",
   "displayName": "RP2040 Auto Flash",
   "description": "Auto-detect port + UF2, auto-flash RP2040/Pico without pressing BOOTSEL",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "JP-Makers",
   "repository": { "type": "git", "url": "https://gitlab.com/JP-Makers/rp2040-autoflash" },
   "license": "MIT",
@@ -56,5 +56,6 @@
   "scripts": {
     "package": "npx vsce package --allow-missing-repository"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "icon": "icon.png"
 }

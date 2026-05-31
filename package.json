@@ -2,7 +2,7 @@
   "name": "rp2040-autoflash",
   "displayName": "RP2040 Auto Flash",
   "description": "Auto-flash RP2040/Pico UF2 files without pressing BOOTSEL — uses the 1200bps reset trick like Arduino IDE",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "JP-Makers",
   "repository": { "type": "git", "url": "https://gitlab.com/JP-Makers/rp2040-autoflash" },
   "license": "MIT",

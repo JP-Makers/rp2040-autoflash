@@ -30,10 +30,10 @@ npm install
 
 # 3. Package it
 npm run package
-# → produces rp2040-autoflash-1.0.0.vsix
+# → produces rp2040-autoflash-1.0.1.vsix
 
 # 4. Install in VS Code
-code --install-extension rp2040-autoflash-1.0.0.vsix
+code --install-extension rp2040-autoflash-1.0.1.vsix
 ```
 
 ### From VS Code
@@ -150,7 +150,3 @@ cd build && cmake .. && make -j4
 - The UF2 file may be corrupt or built for a different board. Verify with `picotool info firmware.uf2`.
 
 ---
-
-[![VSCODE](https://img.shields.io/badge/Download-%20VSIX-5C2D91?style=for-the-badge&logo=visualstudiocode&logoColor=white
-)](https://github.com/JP-Makers/rp2040-autoflash)
-

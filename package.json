@@ -1,0 +1,78 @@
+{
+  "name": "rp2040-autoflash",
+  "displayName": "RP2040 Auto Flash",
+  "description": "Auto-flash RP2040/Pico UF2 files without pressing BOOTSEL — uses the 1200bps reset trick like Arduino IDE",
+  "version": "1.0.0",
+  "publisher": "JP-Makers",
+  "repository": { "type": "git", "url": "https://gitlab.com/JP-Makers/rp2040-autoflash" },
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "keywords": ["rp2040", "raspberry pi pico", "uf2", "flash", "embedded", "pico"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "rp2040-autoflash.flash",
+        "title": "RP2040: Auto Flash UF2",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "rp2040-autoflash.resetOnly",
+        "title": "RP2040: Reset to Bootloader (1200bps trick)"
+      },
+      {
+        "command": "rp2040-autoflash.pickPort",
+        "title": "RP2040: Select Serial Port"
+      },
+      {
+        "command": "rp2040-autoflash.pickUF2",
+        "title": "RP2040: Select UF2 File"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "rp2040-autoflash.flash",
+          "when": "resourceExtname == .uf2",
+          "group": "rp2040"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "RP2040 Auto Flash",
+      "properties": {
+        "rp2040-autoflash.serialPort": {
+          "type": "string",
+          "default": "",
+          "description": "Serial port of the RP2040 (e.g. COM3, /dev/ttyACM0). Leave empty to auto-detect."
+        },
+        "rp2040-autoflash.uf2Path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to UF2 file. Leave empty to pick file each time."
+        },
+        "rp2040-autoflash.bootloaderWaitMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Milliseconds to wait for RPI-RP2 drive to appear after reset."
+        },
+        "rp2040-autoflash.autoDetectDrive": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-detect RPI-RP2 drive after reset."
+        },
+        "rp2040-autoflash.drivePath": {
+          "type": "string",
+          "default": "",
+          "description": "Manual RPI-RP2 drive path (e.g. D:\\ or /media/user/RPI-RP2). Used if auto-detect is off."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx vsce package --allow-missing-repository"
+  },
+  "dependencies": {}
+}

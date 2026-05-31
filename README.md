@@ -1,93 +1,156 @@
-# pico-autoflash
+# RP2040 Auto Flash — VS Code Extension
 
+Auto-flash your Raspberry Pi Pico / RP2040 UF2 files from VS Code **without pressing BOOTSEL** — exactly like Arduino IDE does.
 
+## How It Works
 
-## Getting started
+This extension replicates the **1200bps DTR magic trick** used by the Arduino-Pico core (`uf2conv.py`):
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+1. Opens your RP2040's serial COM port at 9600 baud
+2. Asserts **DTR** (Data Terminal Ready)
+3. Waits ~100ms
+4. Clears DTR
+5. Switches to **1200 baud** and closes the port
+6. The RP2040 firmware detects this sequence and reboots into **USB bootloader mode**
+7. Extension waits for the **RPI-RP2** USB drive to appear
+8. Copies your `.uf2` file to the drive → RP2040 flashes itself and reboots ✅
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+> ⚠️ This trick requires that your RP2040 firmware exposes a **USB CDC serial interface**. If your firmware has no USB serial, the board must be reset manually the first time (hold BOOTSEL while plugging in), then flash via this extension — from that point on auto-reset works as long as your firmware includes USB serial.
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/JP-Makers/pico-autoflash.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-* [Set up project integrations](https://gitlab.com/JP-Makers/pico-autoflash/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+---
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### From VSIX (manual install)
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+# 1. Clone / download this extension folder
+# 2. Install dependencies
+npm install
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# 3. Package it
+npm run package
+# → produces rp2040-autoflash-1.0.0.vsix
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+# 4. Install in VS Code
+code --install-extension rp2040-autoflash-1.0.0.vsix
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### From VS Code
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+`Ctrl+Shift+P` → **Extensions: Install from VSIX…** → select the `.vsix` file.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+---
 
-## License
-For open source projects, say how it is licensed.
+## Commands
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Open the Command Palette (`Ctrl+Shift+P`) and search for **RP2040**:
+
+| Command | Description |
+|---|---|
+| `RP2040: Auto Flash UF2` | Reset board + copy UF2 — full one-click flash |
+| `RP2040: Reset to Bootloader` | Send the 1200bps pulse only (no file copy) |
+| `RP2040: Select Serial Port` | Choose and save the COM port for this workspace |
+| `RP2040: Select UF2 File` | Choose and save the UF2 path for this workspace |
+
+### Right-click shortcut
+
+Right-click any `.uf2` file in the **Explorer** sidebar → **RP2040: Auto Flash UF2**
+
+---
+
+## Settings
+
+Open **Settings** (`Ctrl+,`) and search for `rp2040`:
+
+| Setting | Default | Description |
+|---|---|---|
+| `rp2040-autoflash.serialPort` | _(empty)_ | COM port (e.g. `COM3`, `/dev/ttyACM0`). Empty = pick each time |
+| `rp2040-autoflash.uf2Path` | _(empty)_ | Path to UF2 file. Empty = pick each time |
+| `rp2040-autoflash.bootloaderWaitMs` | `3000` | Milliseconds to wait for RPI-RP2 drive to appear after reset |
+| `rp2040-autoflash.autoDetectDrive` | `true` | Auto-detect the RPI-RP2 USB drive |
+| `rp2040-autoflash.drivePath` | _(empty)_ | Manual drive path (e.g. `D:\` or `/media/user/RPI-RP2`) |
+
+### workspace `.vscode/settings.json` example
+
+```json
+{
+  "rp2040-autoflash.serialPort": "/dev/ttyACM0",
+  "rp2040-autoflash.uf2Path": "${workspaceFolder}/build/firmware.uf2",
+  "rp2040-autoflash.bootloaderWaitMs": 3000
+}
+```
+
+---
+
+## Supported Platforms
+
+| Platform | Status |
+|---|---|
+| Windows 10/11 | ✅ Full support |
+| macOS | ✅ Full support |
+| Linux (Ubuntu, Debian, Fedora) | ✅ Full support |
+
+### Linux: udev rule (avoid `sudo`)
+
+Add this rule so VS Code can access serial ports without root:
+
+```bash
+echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", MODE="0666"' | sudo tee /etc/udev/rules.d/99-rp2040.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+---
+
+## Workflow with Pico SDK / CMake
+
+```bash
+# Build your firmware (CMake)
+cd build && cmake .. && make -j4
+
+# The extension will find build/firmware.uf2 automatically if you set uf2Path
+# Or right-click firmware.uf2 in VS Code Explorer → RP2040: Auto Flash UF2
+```
+
+### Combine with a VS Code Task (`.vscode/tasks.json`)
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build & Flash RP2040",
+      "type": "shell",
+      "command": "cd build && make -j4",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always" },
+      "dependsOn": [],
+      "postBuild": {
+        "command": "rp2040-autoflash.flash"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Troubleshooting
+
+**"No serial ports found"**
+- Make sure your RP2040 firmware includes a USB CDC serial interface (`stdio_usb_init()` in C SDK, or `import usb_cdc` in CircuitPython).
+- On Linux, add your user to the `dialout` group: `sudo usermod -aG dialout $USER` then log out/in.
+
+**"Could not find RPI-RP2 drive"**
+- Increase `bootloaderWaitMs` to `5000` or more.
+- On Windows, check Device Manager — the drive should appear as a removable disk.
+- Set `drivePath` manually if auto-detect fails.
+
+**Reset works but board stays in bootloader**
+- The UF2 file may be corrupt or built for a different board. Verify with `picotool info firmware.uf2`.
+
+---
+
+[![VSCODE](https://img.shields.io/badge/Download-%20VSIX-5C2D91?style=for-the-badge&logo=visualstudiocode&logoColor=white
+)](https://github.com/JP-Makers/rp2040-autoflash)
+
